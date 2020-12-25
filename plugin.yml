@@ -1,0 +1,13 @@
+name: MultiVersion
+load: POSTWORLD
+main: Bavfalcon9\MultiVersion\Loader
+version: 1.0.0-alpha1
+api: 3.0.0
+protocol: [
+  424,
+  423,
+  422,
+  421,
+  419,
+  408
+]
