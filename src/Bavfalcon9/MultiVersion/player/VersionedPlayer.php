@@ -6,11 +6,15 @@ use pocketmine\player\Player;
 use Bavfalcon9\MultiVersion\utils\ProtocolVersion;
 
 class VersionedPlayer {
-	private number $protocol;
+	private int $protocol;
 	private Player $player;
 
 	public function __construct(Player $player, $version) {
 		$this->protocol = $version;
 		$this->player = $player;
+	}
+
+	public function getProtocol(): int {
+		return $this->protocol;
 	}
 }
