@@ -41,7 +41,7 @@ class VersionedPlayer {
      * Get the player
      * @return Player
      */
-    public function getPlayer(): Player {
+    public function getPlayer(): ?Player {
         return $this->player;
     }
 
@@ -53,9 +53,9 @@ class VersionedPlayer {
     public function sendDataPacket(ClientboundPacket $packet, bool $skipAll): void {
         if (!$skipAll) {
             $this->ignoreQueue->enqueue($packet);
-            $this->player->getServer()->broadcastPackets([ $this->player ], [ $packet ]);
+            $this->player->getNetworkSession()->sendDataPacket([ $this->player ], [ $packet ]);
         } else {
-            $this->player->getNetworkSession()->sendDataPacket($packet);
+            $this->player->getNetworkSession()->addToSendBuffer($packet);
         }
     }
 

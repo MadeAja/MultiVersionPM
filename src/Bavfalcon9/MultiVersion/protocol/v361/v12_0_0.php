@@ -27,9 +27,4 @@ class v12_0_0 extends ProtocolAdapter {
         // TODO: Translate all outgoing packets to proper version.
         // These are for sure 1.12 players.
     }
-
-    public function onConnecting(NetworkSession $session, &$packet): void {
-        if ($session->getPlayer())
-            $this->addPlayer($session->getPlayer(), $this->getProtocolId());
-    }
 }

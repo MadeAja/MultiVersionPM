@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bavfalcon9\MultiVersion\protocol;
 
 use pocketmine\event\Listener;
+use pocketmine\event\player\PlayerCreationEvent;
 use pocketmine\event\player\PlayerPreLoginEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
@@ -109,6 +110,10 @@ abstract class ProtocolAdapter implements Listener {
             }
             $versionedPlayer->getPlayer()->getNetworkSession()->getBroadcaster()->broadcastPackets([ $versionedPlayer->getPlayer() ], $packets);
         }
+    }
+
+    public function handleCreatedPlayer(PlayerCreationEvent $ev): void {
+
     }
 
     /**
