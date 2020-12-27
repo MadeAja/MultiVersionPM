@@ -9,6 +9,8 @@ use pocketmine\event\player\PlayerPreLoginEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\handler\LoginPacketHandler;
+use pocketmine\network\mcpe\NetworkSession;
+use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\DataPacket;
 use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
@@ -42,15 +44,17 @@ abstract class ProtocolAdapter implements Listener {
 
     /**
      * Used to inject data into packets.
-     * @param DataPacketSendEvent $ev
+     * @param VersionedPlayer $player
+     * @param ClientboundPacket $packet
      */
-    abstract public function onOutgoing(DataPacketSendEvent $ev): void;
+    abstract public function onOutgoing(VersionedPlayer $player, ClientboundPacket &$packet): void;
 
     /**
      * User is connecting to protocol
+     * @param NetworkSession $session
      * @param DataPacket $packet
      */
-    abstract public function onConnecting(Player $player, DataPacket &$packet);
+    abstract public function onConnecting(NetworkSession $session, DataPacket &$packet);
 
     /**
      * Hacks login.
@@ -63,9 +67,47 @@ abstract class ProtocolAdapter implements Listener {
             if ($this->id === $packet->protocol) {
                 // TODO API method to log this information
                 $packet->protocol = ProtocolInfo::CURRENT_PROTOCOL;
-                $this->onConnecting($ev->getPlayer(), $packet);
+                $this->onConnecting($ev->getOrigin(), $packet);
                 return;
             }
+        }
+    }
+
+    /**
+     * Handles outgoing packets
+     * @param DataPacketSendEvent $ev
+     */
+    public function handleOutgoing(DataPacketSendEvent $ev): void {
+        /** @var VersionedPlayer[] $sendQueue */
+        $sendQueue = [];
+        $targets = $ev->getTargets();
+
+        foreach ($targets as $id => $session) {
+            if (($p = $this->getPlayer($session->getPlayer()->getName()))) {
+                foreach ($ev->getPackets() as $pk) {
+                    $containsPacket = $p->getIgnoreQueue()->contains(function ($packet) use ($pk): bool {
+                        return (spl_object_id($pk) === spl_object_id($packet));
+                    });
+                    if ($containsPacket) {
+                        $p->getPlayer()->getNetworkSession()->sendDataPacket($pk);
+                        $p->getIgnoreQueue()->dequeue($pk);
+                    } else {
+                        $p->getPacketQueue()->enqueue($pk);
+                    }
+                }
+                $sendQueue[] = $p;
+                unset($targets[$id]);
+            }
+        }
+
+        if (count($sendQueue) <= 0) return;
+
+        foreach ($sendQueue as $versionedPlayer) {
+            $packets = $versionedPlayer->getPacketQueue()->dequeueAll();
+            foreach ($packets as &$packet) {
+                $this->onOutgoing($versionedPlayer, $packet);
+            }
+            $versionedPlayer->getPlayer()->getNetworkSession()->getBroadcaster()->broadcastPackets([ $versionedPlayer->getPlayer() ], $packets);
         }
     }
 
@@ -88,6 +130,19 @@ abstract class ProtocolAdapter implements Listener {
         $message = Messages::get("disconnect.reason.shutdown", $this->id);
         $this->disconnectPlayers($message);
         $this->players = [];
+    }
+
+    /**
+     * Get a versioned player.
+     * @param string $name
+     * @return VersionedPlayer|null
+     */
+    public function getPlayer(string $name): ?VersionedPlayer {
+        $match = array_filter($this->players, function ($versionedPlayer) use ($name): bool {
+            return $versionedPlayer->getPlayer()->getName() === $name;
+        });
+
+        return isset($match[0]) ? $match[0] : null;
     }
 
     public function getPlayers(): array {
@@ -115,7 +170,7 @@ abstract class ProtocolAdapter implements Listener {
     protected function removePlayer(string $name): bool {
         foreach ($this->players as $i => $versionedPlayer) {
             if ($versionedPlayer->getPlayer()->getName() === $name) {
-                $versionedPlayer->getPlayer()->close('', Messages::get("disconnect.reason.shutdown", $this->id));
+                $versionedPlayer->getPlayer()->kick(Messages::get("disconnect.reason.shutdown", $this->id));
                 unset($this->players[$i]);
             }
         }
