@@ -2,7 +2,7 @@ name: MultiVersion
 load: POSTWORLD
 main: Bavfalcon9\MultiVersion\Loader
 version: 1.0.0-alpha1
-api: 4.0.0
+api: 3.0.0
 protocol: [ # Must be 1.16 or higher PM version.
   424,
   423,

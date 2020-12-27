@@ -9,13 +9,12 @@ use pocketmine\event\player\PlayerCreationEvent;
 use pocketmine\event\player\PlayerPreLoginEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
-use pocketmine\network\mcpe\handler\LoginPacketHandler;
-use pocketmine\network\mcpe\NetworkSession;
-use pocketmine\network\mcpe\protocol\ClientboundPacket;
+use pocketmine\network\mcpe\protocol\BatchPacket;
 use pocketmine\network\mcpe\protocol\DataPacket;
 use pocketmine\network\mcpe\protocol\LoginPacket;
+use pocketmine\network\mcpe\protocol\PacketPool;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
-use pocketmine\player\Player;
+use pocketmine\Player;
 use pocketmine\plugin\PluginManager;
 use Bavfalcon9\MultiVersion\utils\Messages;
 use Bavfalcon9\MultiVersion\player\VersionedPlayer;
@@ -39,38 +38,58 @@ abstract class ProtocolAdapter implements Listener {
 
     /**
      * Used to inject data into incoming packets.
-     * @param DataPacketReceiveEvent $ev
+     * @param VersionedPlayer $player
+     * @param DataPacket $packet
      */
-    abstract public function onIncoming(DataPacketReceiveEvent $ev): void;
+    abstract public function onIncoming(VersionedPlayer $player, DataPacket &$packet): void;
 
     /**
      * Used to inject data into packets.
      * @param VersionedPlayer $player
-     * @param ClientboundPacket $packet
+     * @param DataPacket $packet
      */
-    abstract public function onOutgoing(VersionedPlayer $player, ClientboundPacket &$packet): void;
+    abstract public function onOutgoing(VersionedPlayer $player, DataPacket &$packet): void;
 
     /**
      * User is connecting to protocol
-     * @param NetworkSession $session
+     * @param Player $session
      * @param DataPacket $packet
      */
-    abstract public function onConnecting(NetworkSession $session, DataPacket &$packet);
+    abstract public function onConnecting(Player $session, DataPacket &$packet);
 
     /**
-     * Hacks login.
+     * Hacks login and handles batches.
      * @param DataPacketReceiveEvent $ev
      */
-    public function handleConnecting(DataPacketReceiveEvent $ev): void {
+    public function handleIncoming(DataPacketReceiveEvent $ev): void {
         $packet = $ev->getPacket();
+        $player = $this->getPlayer($ev->getPlayer()->getName());
 
         if ($packet instanceof LoginPacket) {
             if ($this->id === $packet->protocol) {
-                // TODO API method to log this information
                 $packet->protocol = ProtocolInfo::CURRENT_PROTOCOL;
-                $this->onConnecting($ev->getOrigin(), $packet);
+                $this->onConnecting($ev->getPlayer(), $packet);
+                $this->addPlayer($ev->getPlayer(), $this->getProtocolId());
                 return;
             }
+        }
+
+        if ($packet instanceof BatchPacket) {
+            $newPackets = [];
+            foreach ($packet->getPackets() as $buf) {
+                $pk = PacketPool::getPacket($buf);
+                $pk->decode();
+                $this->onIncoming($player, $pk);
+                $newPackets[] = $pk;
+            }
+
+            // rebatch
+            $packet = new BatchPacket();
+
+            foreach ($newPackets as $pk) {
+                $packet->addPacket($pk);
+            }
+            return;
         }
     }
 
@@ -79,37 +98,7 @@ abstract class ProtocolAdapter implements Listener {
      * @param DataPacketSendEvent $ev
      */
     public function handleOutgoing(DataPacketSendEvent $ev): void {
-        /** @var VersionedPlayer[] $sendQueue */
-        $sendQueue = [];
-        $targets = $ev->getTargets();
 
-        foreach ($targets as $id => $session) {
-            if (($p = $this->getPlayer($session->getPlayer()->getName()))) {
-                foreach ($ev->getPackets() as $pk) {
-                    $containsPacket = $p->getIgnoreQueue()->contains(function ($packet) use ($pk): bool {
-                        return (spl_object_id($pk) === spl_object_id($packet));
-                    });
-                    if ($containsPacket) {
-                        $p->getPlayer()->getNetworkSession()->sendDataPacket($pk);
-                        $p->getIgnoreQueue()->dequeue($pk);
-                    } else {
-                        $p->getPacketQueue()->enqueue($pk);
-                    }
-                }
-                $sendQueue[] = $p;
-                unset($targets[$id]);
-            }
-        }
-
-        if (count($sendQueue) <= 0) return;
-
-        foreach ($sendQueue as $versionedPlayer) {
-            $packets = $versionedPlayer->getPacketQueue()->dequeueAll();
-            foreach ($packets as &$packet) {
-                $this->onOutgoing($versionedPlayer, $packet);
-            }
-            $versionedPlayer->getPlayer()->getNetworkSession()->getBroadcaster()->broadcastPackets([ $versionedPlayer->getPlayer() ], $packets);
-        }
     }
 
     public function handleCreatedPlayer(PlayerCreationEvent $ev): void {
@@ -175,7 +164,7 @@ abstract class ProtocolAdapter implements Listener {
     protected function removePlayer(string $name): bool {
         foreach ($this->players as $i => $versionedPlayer) {
             if ($versionedPlayer->getPlayer()->getName() === $name) {
-                $versionedPlayer->getPlayer()->kick(Messages::get("disconnect.reason.shutdown", $this->id));
+                $versionedPlayer->getPlayer()->close('', Messages::get("disconnect.reason.shutdown", $this->id));
                 unset($this->players[$i]);
             }
         }

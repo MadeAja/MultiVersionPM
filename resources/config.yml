@@ -12,8 +12,8 @@ version: 0.0.1
 prefix: "&c[MultiVersion]"
 
 # The version of PM this config targets to
-# Currently, only 4.0.0 is supported here.
-pm-target: 4.0.0
+# Currently, only 3.0.0 is supported here.
+pm-target: 3.0.0
 
 # This is not really important to the user.
 server-version: auto

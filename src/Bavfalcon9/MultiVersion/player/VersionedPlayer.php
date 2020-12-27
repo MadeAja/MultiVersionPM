@@ -2,11 +2,9 @@
 
 namespace Bavfalcon9\MultiVersion\player;
 
-use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\DataPacket;
-use pocketmine\player\Player;
+use pocketmine\Player;
 use Bavfalcon9\MultiVersion\utils\Queue;
-use Bavfalcon9\MultiVersion\utils\ProtocolVersion;
 
 class VersionedPlayer {
     private int $protocol;
@@ -47,15 +45,14 @@ class VersionedPlayer {
 
     /**
      * Send a DataPacket to a player without MultiVersion checking it.
-     * @param ClientboundPacket $packet
+     * @param DataPacket $packet
      * @param bool $skipAll - Whether or not to send without calling any events.
      */
-    public function sendDataPacket(ClientboundPacket $packet, bool $skipAll): void {
+    public function sendDataPacket(DataPacket $packet, bool $skipAll): void {
         if (!$skipAll) {
             $this->ignoreQueue->enqueue($packet);
-            $this->player->getNetworkSession()->sendDataPacket([ $this->player ], [ $packet ]);
+            $this->player->sendDataPacket($packet);
         } else {
-            $this->player->getNetworkSession()->addToSendBuffer($packet);
         }
     }
 
