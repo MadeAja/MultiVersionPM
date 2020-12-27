@@ -8,6 +8,9 @@
 # Config version, do not change.
 version: 0.0.1
 
+# The prefix for multiversion
+prefix: "&c[MultiVersion]"
+
 # The version of PM this config targets to
 # Currently, only 4.0.0 is supported here.
 pm-target: 4.0.0
@@ -17,7 +20,13 @@ server-version: auto
 
 # Versions that are allowed to join the server
 allowed:
-  - 421 # 1.16.200
+  - 422 # Beta 1.16.200.57
   - 390 # 1.14.60
   - 388 # 1.13.0
-  - 361 # 1.12.0
+  - v361 # 1.12.0
+
+messages:
+  disconnect.reason.outdated_protocol: "&cYour game's version ({%0}) is not supported by MultiVersion"
+  disconnect.reason.newer_protocol: "&cMultiVersion has not updated to your game version yet."
+  disconnect.reason.start_error: "&cMultiVersion ran into an issue whilst processing your login."
+  disconnect.reason.not_allowed: "&cYour current game version is dis-allowed by this server."

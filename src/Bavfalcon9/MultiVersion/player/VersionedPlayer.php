@@ -17,4 +17,8 @@ class VersionedPlayer {
 	public function getProtocol(): int {
 		return $this->protocol;
 	}
+
+	public function getPlayer(): Player {
+	    return $this->player;
+    }
 }
